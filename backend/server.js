@@ -24,13 +24,11 @@ if (DATABASE_URL) {
   
   dbAsync = {
     all: async (sql, params = []) => {
-      // Convert ? to $1, $2... for PostgreSQL
       let pgSql = sql
       let i = 1
       while (pgSql.includes('?')) {
         pgSql = pgSql.replace('?', `$${i++}`)
       }
-      // SQLite style LIMIT to PostgreSQL
       pgSql = pgSql.replace(/\bstrftime\('%m',\s*fecha\)/g, "EXTRACT(MONTH FROM fecha)")
       pgSql = pgSql.replace(/\bstrftime\('%Y',\s*fecha\)/g, "EXTRACT(YEAR FROM fecha)")
       pgSql = pgSql.replace(/INTEGER PRIMARY KEY AUTOINCREMENT/g, "SERIAL PRIMARY KEY")
@@ -57,6 +55,9 @@ if (DATABASE_URL) {
       }
       pgSql = pgSql.replace(/INTEGER PRIMARY KEY AUTOINCREMENT/g, "SERIAL PRIMARY KEY")
       pgSql = pgSql.replace(/DATETIME DEFAULT CURRENT_TIMESTAMP/g, "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+      if (/^\s*INSERT\s+INTO/i.test(pgSql) && !/RETURNING/i.test(pgSql)) {
+        pgSql += ' RETURNING id'
+      }
       const result = await pool.query(pgSql, params)
       return { lastID: result.rows[0]?.id || 0, changes: result.rowCount }
     }
@@ -232,6 +233,9 @@ async function initDatabase() {
         id SERIAL PRIMARY KEY,
         clave TEXT UNIQUE NOT NULL,
         valor TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )`
@@ -707,3 +711,31 @@ app.get("/api/ventas/stats/summary", authMiddleware, async (req, res) => {
 
 // Health check
 app
+
+// Health check - fixed
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', message: 'BLACKRAIN ERP API' })
+})
+
+// Serve static files in production
+const FRONTEND_DIST = path.join(__dirname, '..', 'frontend', 'dist')
+if (fs.existsSync(FRONTEND_DIST)) {
+  app.use(express.static(FRONTEND_DIST))
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(FRONTEND_DIST, 'index.html'))
+  })
+}
+
+const PORT = process.env.PORT || 5000
+
+;(async () => {
+  try {
+    await initDatabase()
+    app.listen(PORT, () => {
+      console.log(Servidor corriendo en puerto )
+    })
+  } catch (err) {
+    console.error('Fatal:', err)
+    process.exit(1)
+  }
+})()
