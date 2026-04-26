@@ -1,6 +1,5 @@
 const express = require("express")
 const cors = require("cors")
-const sqlite3 = require("sqlite3").verbose()
 const path = require("path")
 const fs = require("fs")
 
@@ -10,160 +9,96 @@ const app = express()
 app.use(cors())
 app.use(express.json())
 
-// SQLite database path
-const DB_PATH = path.join(__dirname, "blackrain_erp.db")
-const db = new sqlite3.Database(DB_PATH)
+// ============ DATABASE SETUP ============
+// Use PostgreSQL if DATABASE_URL is provided (Render), otherwise SQLite (local)
+const DATABASE_URL = process.env.DATABASE_URL
+let db, dbAsync
 
-// Enable foreign keys
-db.run("PRAGMA foreign_keys = ON")
-
-// Initialize database with schema and data
-function initDatabase() {
-  return new Promise((resolve, reject) => {
-    db.serialize(() => {
-      // Create tables
-      db.run(`CREATE TABLE IF NOT EXISTS usuarios (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        email TEXT UNIQUE NOT NULL,
-        password TEXT NOT NULL,
-        nombre TEXT NOT NULL,
-        rol TEXT DEFAULT 'usuario',
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )`)
-
-      db.run(`CREATE TABLE IF NOT EXISTS clientes (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        nombre TEXT NOT NULL,
-        email TEXT UNIQUE NOT NULL,
-        telefono TEXT,
-        direccion TEXT,
-        tipo TEXT DEFAULT 'regular',
-        estado TEXT DEFAULT 'activo',
-        pedidos INTEGER DEFAULT 0,
-        total_gastado REAL DEFAULT 0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )`)
-
-      db.run(`CREATE TABLE IF NOT EXISTS productos (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        nombre TEXT NOT NULL,
-        sku TEXT UNIQUE NOT NULL,
-        categoria TEXT,
-        stock INTEGER DEFAULT 0,
-        precio REAL DEFAULT 0,
-        estado TEXT DEFAULT 'en_stock',
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )`)
-
-      db.run(`CREATE TABLE IF NOT EXISTS ventas (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        cliente_id INTEGER,
-        cliente TEXT NOT NULL,
-        fecha TEXT NOT NULL,
-        total REAL NOT NULL,
-        estado TEXT DEFAULT 'pendiente_pago',
-        metodo_pago TEXT DEFAULT 'Efectivo',
-        productos INTEGER DEFAULT 0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE SET NULL
-      )`)
-
-      db.run(`CREATE TABLE IF NOT EXISTS ajustes (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        clave TEXT UNIQUE NOT NULL,
-        valor TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )`)
-
-      // Check if data already exists
-      db.get("SELECT COUNT(*) as count FROM usuarios", (err, row) => {
-        if (err) {
-          console.error("Error checking data:", err)
-          reject(err)
-          return
-        }
-
-        if (row.count === 0) {
-          // Insert default data
-          const stmt1 = db.prepare("INSERT INTO usuarios (email, password, nombre, rol) VALUES (?, ?, ?, ?)")
-          stmt1.run('admin@erp.com', '$2a$10$xO7O.yVJ5.sKjG5.sKjG5.sKjG5.sKjG5.sKjG5.sKjG5.sKjG5.sKjG', 'Carlos Méndez', 'administrador')
-          stmt1.finalize()
-
-          const stmt2 = db.prepare("INSERT INTO clientes (nombre, email, telefono, direccion, tipo, estado, pedidos, total_gastado) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-          stmt2.run('Juan Pérez', 'juan.perez@email.com', '55 1234 5678', 'Av. Reforma 123, CDMX', 'regular', 'activo', 5, 45000)
-          stmt2.run('María García', 'maria.garcia@email.com', '55 2345 6789', 'Av. UNAM 456, CDMX', 'vip', 'activo', 12, 125000)
-          stmt2.run('Carlos López', 'carlos.lopez@email.com', '55 3456 7890', 'Calle 5 de Mayo 789, GDL', 'regular', 'activo', 3, 28000)
-          stmt2.run('Ana Martínez', 'ana.martinez@email.com', '55 4567 8901', 'Blvd. Ávila Camacho MTY', 'mayorista', 'activo', 25, 450000)
-          stmt2.run('Pedro Sánchez', 'pedro.sanchez@email.com', '55 5678 9012', 'Av. Mazaryk POL', 'regular', 'inactivo', 1, 5000)
-          stmt2.finalize()
-
-          const stmt3 = db.prepare("INSERT INTO productos (nombre, sku, categoria, stock, precio, estado) VALUES (?, ?, ?, ?, ?, ?)")
-          stmt3.run('Laptop Dell XPS 15', 'LAP-DEL-001', 'Electrónica', 15, 25000, 'en_stock')
-          stmt3.run('Mouse Logitech MX', 'MOU-LOG-002', 'Electrónica', 8, 1500, 'bajo_stock')
-          stmt3.run('Teclado Mecánico RGB', 'TEC-MEC-003', 'Electrónica', 0, 3500, 'agotado')
-          stmt3.run('Monitor 27" 4K', 'MON-4K-004', 'Electrónica', 22, 12000, 'en_stock')
-          stmt3.run('Escritorio Ejecutivo', 'MUE-ESC-005', 'Hogar', 5, 8500, 'bajo_stock')
-          stmt3.run('Silla Ergonómica', 'MUE-SIL-006', 'Hogar', 12, 5500, 'en_stock')
-          stmt3.run('Auriculares Sony WH', 'AUD-SON-007', 'Electrónica', 3, 4500, 'bajo_stock')
-          stmt3.run('Webcam HD 1080p', 'CAM-WEB-008', 'Electrónica', 30, 1800, 'en_stock')
-          stmt3.finalize()
-
-          const stmt4 = db.prepare("INSERT INTO ventas (cliente_id, cliente, fecha, total, estado, metodo_pago, productos) VALUES (?, ?, ?, ?, ?, ?, ?)")
-          stmt4.run(1, 'Juan Pérez', '2025-01-14', 15400, 'en_proceso', 'Tarjeta', 3)
-          stmt4.run(2, 'María García', '2025-01-14', 8750, 'pendiente_pago', 'Transferencia', 2)
-          stmt4.run(3, 'Carlos López', '2025-01-13', 22300, 'entregado', 'Tarjeta', 5)
-          stmt4.run(4, 'Ana Martínez', '2025-01-13', 5200, 'cancelado', 'Efectivo', 1)
-          stmt4.run(1, 'Juan Pérez', '2025-01-12', 18900, 'entregado', 'Tarjeta', 4)
-          stmt4.run(2, 'María García', '2025-01-11', 31500, 'entregado', 'Transferencia', 6)
-          stmt4.run(3, 'Carlos López', '2025-01-10', 12800, 'pendiente_pago', 'Tarjeta', 2)
-          stmt4.finalize()
-
-          const stmt5 = db.prepare("INSERT INTO ajustes (clave, valor) VALUES (?, ?)")
-          stmt5.run('nombre_empresa', 'BLACKRAIN')
-          stmt5.run('dark_mode', 'true')
-          stmt5.run('moneda', 'MXN')
-          stmt5.finalize()
-
-          console.log("✅ Base de datos SQLite inicializada con datos de ejemplo")
-        } else {
-          console.log("✅ Base de datos SQLite ya contiene datos")
-        }
-        resolve()
-      })
-    })
+if (DATABASE_URL) {
+  // PostgreSQL (Render production)
+  const { Pool } = require("pg")
+  const pool = new Pool({
+    connectionString: DATABASE_URL,
+    ssl: { rejectUnauthorized: false }
   })
-}
-
-// Promisify db methods for async/await
-const dbAsync = {
-  all: (sql, params = []) => {
-    return new Promise((resolve, reject) => {
-      db.all(sql, params, (err, rows) => {
-        if (err) reject(err)
-        else resolve(rows)
+  
+  dbAsync = {
+    all: async (sql, params = []) => {
+      // Convert ? to $1, $2... for PostgreSQL
+      let pgSql = sql
+      let i = 1
+      while (pgSql.includes('?')) {
+        pgSql = pgSql.replace('?', `$${i++}`)
+      }
+      // SQLite style LIMIT to PostgreSQL
+      pgSql = pgSql.replace(/\bstrftime\('%m',\s*fecha\)/g, "EXTRACT(MONTH FROM fecha)")
+      pgSql = pgSql.replace(/\bstrftime\('%Y',\s*fecha\)/g, "EXTRACT(YEAR FROM fecha)")
+      pgSql = pgSql.replace(/INTEGER PRIMARY KEY AUTOINCREMENT/g, "SERIAL PRIMARY KEY")
+      const result = await pool.query(pgSql, params)
+      return result.rows
+    },
+    get: async (sql, params = []) => {
+      let pgSql = sql
+      let i = 1
+      while (pgSql.includes('?')) {
+        pgSql = pgSql.replace('?', `$${i++}`)
+      }
+      pgSql = pgSql.replace(/\bstrftime\('%m',\s*fecha\)/g, "EXTRACT(MONTH FROM fecha)")
+      pgSql = pgSql.replace(/\bstrftime\('%Y',\s*fecha\)/g, "EXTRACT(YEAR FROM fecha)")
+      pgSql = pgSql.replace(/INTEGER PRIMARY KEY AUTOINCREMENT/g, "SERIAL PRIMARY KEY")
+      const result = await pool.query(pgSql, params)
+      return result.rows[0] || null
+    },
+    run: async (sql, params = []) => {
+      let pgSql = sql
+      let i = 1
+      while (pgSql.includes('?')) {
+        pgSql = pgSql.replace('?', `$${i++}`)
+      }
+      pgSql = pgSql.replace(/INTEGER PRIMARY KEY AUTOINCREMENT/g, "SERIAL PRIMARY KEY")
+      pgSql = pgSql.replace(/DATETIME DEFAULT CURRENT_TIMESTAMP/g, "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+      const result = await pool.query(pgSql, params)
+      return { lastID: result.rows[0]?.id || 0, changes: result.rowCount }
+    }
+  }
+  
+  db = pool
+  console.log("🔌 Conectado a PostgreSQL")
+  
+} else {
+  // SQLite (local development)
+  const sqlite3 = require("sqlite3").verbose()
+  const DB_PATH = path.join(__dirname, "blackrain_erp.db")
+  const sqliteDb = new sqlite3.Database(DB_PATH)
+  sqliteDb.run("PRAGMA foreign_keys = ON")
+  db = sqliteDb
+  console.log("📁 Usando SQLite local")
+  
+  dbAsync = {
+    all: (sql, params = []) => {
+      return new Promise((resolve, reject) => {
+        db.all(sql, params, (err, rows) => {
+          if (err) reject(err)
+          else resolve(rows)
+        })
       })
-    })
-  },
-  get: (sql, params = []) => {
-    return new Promise((resolve, reject) => {
-      db.get(sql, params, (err, row) => {
-        if (err) reject(err)
-        else resolve(row)
+    },
+    get: (sql, params = []) => {
+      return new Promise((resolve, reject) => {
+        db.get(sql, params, (err, row) => {
+          if (err) reject(err)
+          else resolve(row)
+        })
       })
-    })
-  },
-  run: (sql, params = []) => {
-    return new Promise((resolve, reject) => {
-      db.run(sql, params, function(err) {
-        if (err) reject(err)
-        else resolve({ lastID: this.lastID, changes: this.changes })
+    },
+    run: (sql, params = []) => {
+      return new Promise((resolve, reject) => {
+        db.run(sql, params, function(err) {
+          if (err) reject(err)
+          else resolve({ lastID: this.lastID, changes: this.changes })
+        })
       })
-    })
+    }
   }
 }
 
@@ -188,6 +123,193 @@ const authMiddleware = (req, res, next) => {
     next()
   } catch (error) {
     return res.status(401).json({ message: "Token inválido" })
+  }
+}
+
+// Initialize database with schema and data
+async function initDatabase() {
+  const createUsuarios = DATABASE_URL
+    ? `CREATE TABLE IF NOT EXISTS usuarios (
+        id SERIAL PRIMARY KEY,
+        email TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
+        nombre TEXT NOT NULL,
+        rol TEXT DEFAULT 'usuario',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`
+    : `CREATE TABLE IF NOT EXISTS usuarios (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
+        nombre TEXT NOT NULL,
+        rol TEXT DEFAULT 'usuario',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )`
+
+  const createClientes = DATABASE_URL
+    ? `CREATE TABLE IF NOT EXISTS clientes (
+        id SERIAL PRIMARY KEY,
+        nombre TEXT NOT NULL,
+        email TEXT UNIQUE NOT NULL,
+        telefono TEXT,
+        direccion TEXT,
+        tipo TEXT DEFAULT 'regular',
+        estado TEXT DEFAULT 'activo',
+        pedidos INTEGER DEFAULT 0,
+        total_gastado REAL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`
+    : `CREATE TABLE IF NOT EXISTS clientes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nombre TEXT NOT NULL,
+        email TEXT UNIQUE NOT NULL,
+        telefono TEXT,
+        direccion TEXT,
+        tipo TEXT DEFAULT 'regular',
+        estado TEXT DEFAULT 'activo',
+        pedidos INTEGER DEFAULT 0,
+        total_gastado REAL DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )`
+
+  const createProductos = DATABASE_URL
+    ? `CREATE TABLE IF NOT EXISTS productos (
+        id SERIAL PRIMARY KEY,
+        nombre TEXT NOT NULL,
+        sku TEXT UNIQUE NOT NULL,
+        categoria TEXT,
+        stock INTEGER DEFAULT 0,
+        precio REAL DEFAULT 0,
+        estado TEXT DEFAULT 'en_stock',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`
+    : `CREATE TABLE IF NOT EXISTS productos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nombre TEXT NOT NULL,
+        sku TEXT UNIQUE NOT NULL,
+        categoria TEXT,
+        stock INTEGER DEFAULT 0,
+        precio REAL DEFAULT 0,
+        estado TEXT DEFAULT 'en_stock',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )`
+
+  const createVentas = DATABASE_URL
+    ? `CREATE TABLE IF NOT EXISTS ventas (
+        id SERIAL PRIMARY KEY,
+        cliente_id INTEGER REFERENCES clientes(id) ON DELETE SET NULL,
+        cliente TEXT NOT NULL,
+        fecha DATE NOT NULL,
+        total REAL NOT NULL,
+        estado TEXT DEFAULT 'pendiente_pago',
+        metodo_pago TEXT DEFAULT 'Efectivo',
+        productos INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`
+    : `CREATE TABLE IF NOT EXISTS ventas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cliente_id INTEGER,
+        cliente TEXT NOT NULL,
+        fecha TEXT NOT NULL,
+        total REAL NOT NULL,
+        estado TEXT DEFAULT 'pendiente_pago',
+        metodo_pago TEXT DEFAULT 'Efectivo',
+        productos INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE SET NULL
+      )`
+
+  const createAjustes = DATABASE_URL
+    ? `CREATE TABLE IF NOT EXISTS ajustes (
+        id SERIAL PRIMARY KEY,
+        clave TEXT UNIQUE NOT NULL,
+        valor TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`
+    : `CREATE TABLE IF NOT EXISTS ajustes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        clave TEXT UNIQUE NOT NULL,
+        valor TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )`
+
+  await dbAsync.run(createUsuarios)
+  await dbAsync.run(createClientes)
+  await dbAsync.run(createProductos)
+  await dbAsync.run(createVentas)
+  await dbAsync.run(createAjustes)
+
+  // Check if data exists
+  const row = await dbAsync.get("SELECT COUNT(*) as count FROM usuarios")
+  if (row.count === 0) {
+    // Insert sample data with safe syntax
+    try {
+      await dbAsync.run("INSERT INTO usuarios (email, password, nombre, rol) VALUES (?, ?, ?, ?)",
+        ['ositodepeluche@oso.com.mx', '$2a$10$xO7O.yVJ5.sKjG5.sKjG5.sKjG5.sKjG5.sKjG5.sKjG5.sKjG5.sKjG', 'Administrador', 'administrador'])
+      
+      await dbAsync.run("INSERT INTO clientes (nombre, email, telefono, direccion, tipo, estado, pedidos, total_gastado) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        ['Juan Pérez', 'juan.perez@email.com', '55 1234 5678', 'Av. Reforma 123, CDMX', 'regular', 'activo', 5, 45000])
+      await dbAsync.run("INSERT INTO clientes (nombre, email, telefono, direccion, tipo, estado, pedidos, total_gastado) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        ['María García', 'maria.garcia@email.com', '55 2345 6789', 'Av. UNAM 456, CDMX', 'vip', 'activo', 12, 125000])
+      await dbAsync.run("INSERT INTO clientes (nombre, email, telefono, direccion, tipo, estado, pedidos, total_gastado) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        ['Carlos López', 'carlos.lopez@email.com', '55 3456 7890', 'Calle 5 de Mayo 789, GDL', 'regular', 'activo', 3, 28000])
+      await dbAsync.run("INSERT INTO clientes (nombre, email, telefono, direccion, tipo, estado, pedidos, total_gastado) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        ['Ana Martínez', 'ana.martinez@email.com', '55 4567 8901', 'Blvd. Ávila Camacho MTY', 'mayorista', 'activo', 25, 450000])
+      await dbAsync.run("INSERT INTO clientes (nombre, email, telefono, direccion, tipo, estado, pedidos, total_gastado) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        ['Pedro Sánchez', 'pedro.sanchez@email.com', '55 5678 9012', 'Av. Mazaryk POL', 'regular', 'inactivo', 1, 5000])
+
+      await dbAsync.run("INSERT INTO productos (nombre, sku, categoria, stock, precio, estado) VALUES (?, ?, ?, ?, ?, ?)",
+        ['Laptop Dell XPS 15', 'LAP-DEL-001', 'Electrónica', 15, 25000, 'en_stock'])
+      await dbAsync.run("INSERT INTO productos (nombre, sku, categoria, stock, precio, estado) VALUES (?, ?, ?, ?, ?, ?)",
+        ['Mouse Logitech MX', 'MOU-LOG-002', 'Electrónica', 8, 1500, 'bajo_stock'])
+      await dbAsync.run("INSERT INTO productos (nombre, sku, categoria, stock, precio, estado) VALUES (?, ?, ?, ?, ?, ?)",
+        ['Teclado Mecánico RGB', 'TEC-MEC-003', 'Electrónica', 0, 3500, 'agotado'])
+      await dbAsync.run("INSERT INTO productos (nombre, sku, categoria, stock, precio, estado) VALUES (?, ?, ?, ?, ?, ?)",
+        ['Monitor 27" 4K', 'MON-4K-004', 'Electrónica', 22, 12000, 'en_stock'])
+      await dbAsync.run("INSERT INTO productos (nombre, sku, categoria, stock, precio, estado) VALUES (?, ?, ?, ?, ?, ?)",
+        ['Escritorio Ejecutivo', 'MUE-ESC-005', 'Hogar', 5, 8500, 'bajo_stock'])
+      await dbAsync.run("INSERT INTO productos (nombre, sku, categoria, stock, precio, estado) VALUES (?, ?, ?, ?, ?, ?)",
+        ['Silla Ergonómica', 'MUE-SIL-006', 'Hogar', 12, 5500, 'en_stock'])
+      await dbAsync.run("INSERT INTO productos (nombre, sku, categoria, stock, precio, estado) VALUES (?, ?, ?, ?, ?, ?)",
+        ['Auriculares Sony WH', 'AUD-SON-007', 'Electrónica', 3, 4500, 'bajo_stock'])
+      await dbAsync.run("INSERT INTO productos (nombre, sku, categoria, stock, precio, estado) VALUES (?, ?, ?, ?, ?, ?)",
+        ['Webcam HD 1080p', 'CAM-WEB-008', 'Electrónica', 30, 1800, 'en_stock'])
+
+      await dbAsync.run("INSERT INTO ventas (cliente_id, cliente, fecha, total, estado, metodo_pago, productos) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [1, 'Juan Pérez', '2025-01-14', 15400, 'en_proceso', 'Tarjeta', 3])
+      await dbAsync.run("INSERT INTO ventas (cliente_id, cliente, fecha, total, estado, metodo_pago, productos) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [2, 'María García', '2025-01-14', 8750, 'pendiente_pago', 'Transferencia', 2])
+      await dbAsync.run("INSERT INTO ventas (cliente_id, cliente, fecha, total, estado, metodo_pago, productos) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [3, 'Carlos López', '2025-01-13', 22300, 'entregado', 'Tarjeta', 5])
+      await dbAsync.run("INSERT INTO ventas (cliente_id, cliente, fecha, total, estado, metodo_pago, productos) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [4, 'Ana Martínez', '2025-01-13', 5200, 'cancelado', 'Efectivo', 1])
+      await dbAsync.run("INSERT INTO ventas (cliente_id, cliente, fecha, total, estado, metodo_pago, productos) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [1, 'Juan Pérez', '2025-01-12', 18900, 'entregado', 'Tarjeta', 4])
+      await dbAsync.run("INSERT INTO ventas (cliente_id, cliente, fecha, total, estado, metodo_pago, productos) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [2, 'María García', '2025-01-11', 31500, 'entregado', 'Transferencia', 6])
+      await dbAsync.run("INSERT INTO ventas (cliente_id, cliente, fecha, total, estado, metodo_pago, productos) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [3, 'Carlos López', '2025-01-10', 12800, 'pendiente_pago', 'Tarjeta', 2])
+
+      await dbAsync.run("INSERT INTO ajustes (clave, valor) VALUES (?, ?)", ['nombre_empresa', 'BLACKRAIN'])
+      await dbAsync.run("INSERT INTO ajustes (clave, valor) VALUES (?, ?)", ['dark_mode', 'true'])
+      await dbAsync.run("INSERT INTO ajustes (clave, valor) VALUES (?, ?)", ['moneda', 'MXN'])
+
+      console.log("✅ Base de datos inicializada con datos de ejemplo")
+    } catch (err) {
+      console.error("Error inserting sample data:", err)
+    }
+  } else {
+    console.log("✅ Base de datos ya contiene datos")
   }
 }
 
@@ -549,14 +671,22 @@ app.delete("/api/ventas/:id", authMiddleware, async (req, res) => {
 
 app.get("/api/ventas/stats/summary", authMiddleware, async (req, res) => {
   try {
-    const ventasTotal = await dbAsync.get("SELECT SUM(total) as total, COUNT(*) as count FROM ventas")
+    let ventasTotalQuery, ventasMesQuery
+    if (DATABASE_URL) {
+      // PostgreSQL
+      ventasTotalQuery = "SELECT SUM(total) as total, COUNT(*) as count FROM ventas"
+      ventasMesQuery = "SELECT SUM(total) as total FROM ventas WHERE EXTRACT(MONTH FROM fecha) = $1 AND EXTRACT(YEAR FROM fecha) = $2"
+    } else {
+      // SQLite
+      ventasTotalQuery = "SELECT SUM(total) as total, COUNT(*) as count FROM ventas"
+      ventasMesQuery = "SELECT SUM(total) as total FROM ventas WHERE strftime('%m', fecha) = ? AND strftime('%Y', fecha) = ?"
+    }
+    
+    const ventasTotal = await dbAsync.get(ventasTotalQuery)
     const now = new Date()
     const currentMonth = String(now.getMonth() + 1).padStart(2, '0')
-    const currentYear = now.getFullYear()
-    const ventasMes = await dbAsync.get(
-      "SELECT SUM(total) as total FROM ventas WHERE strftime('%m', fecha) = ? AND strftime('%Y', fecha) = ?",
-      [currentMonth, String(currentYear)]
-    )
+    const currentYear = String(now.getFullYear())
+    const ventasMes = await dbAsync.get(ventasMesQuery, [currentMonth, currentYear])
     const pedidosActivos = await dbAsync.get(
       "SELECT COUNT(*) as count FROM ventas WHERE estado IN ('en_proceso', 'pendiente_pago')"
     )
@@ -576,34 +706,4 @@ app.get("/api/ventas/stats/summary", authMiddleware, async (req, res) => {
 })
 
 // Health check
-app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", message: "BLACKRAIN ERP API" })
-})
-
-// Serve static frontend files
-const frontendDistPath = path.join(__dirname, "../frontend/dist")
-if (fs.existsSync(frontendDistPath)) {
-  app.use(express.static(frontendDistPath))
-  app.get("*", (req, res) => {
-    res.sendFile(path.join(frontendDistPath, "index.html"))
-  })
-}
-
-// Initialize and start
-const PORT = process.env.PORT || 5000
-
-initDatabase().then(() => {
-  app.listen(PORT, () => {
-    console.log(`🚀 Servidor BLACKRAIN ERP corriendo en puerto ${PORT}`)
-    console.log(`📁 Base de datos: ${DB_PATH}`)
-    if (fs.existsSync(frontendDistPath)) {
-      console.log(`🌐 Frontend servido desde: ${frontendDistPath}`)
-    } else {
-      console.log(`⚠️  No se encontró frontend/dist. Ejecuta 'npm run build' en la carpeta frontend.`)
-    }
-  })
-}).catch(err => {
-  console.error("❌ Error al inicializar la base de datos:", err)
-  process.exit(1)
-})
-
+app
