@@ -1,0 +1,238 @@
+/* Import Google Fonts - debe ir primero */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =============================================
+   VARIABLES CSS PARA TEMAS
+   ============================================= */
+
+/* =============================================
+   TEMAS - Definidos en html para mayor especificidad
+   ============================================= */
+
+/* Fallback por defecto (sin clase = oscuro) */
+:root {
+  --color-bg: #0f172a;
+  --color-sidebar: #0b1120;
+  --color-card: #1e293b;
+  --color-card-hover: #273548;
+  --color-gold: #c8a75b;
+  --color-gold-hover: #d4b76a;
+  --color-gold-dark: #a88b3f;
+  --color-text: #ffffff;
+  --color-text-secondary: #94a3b8;
+  --color-text-muted: #64748b;
+  --color-border: #334155;
+}
+
+/* Tema oscuro explícito */
+html.dark, .dark {
+  --color-bg: #0f172a;
+  --color-sidebar: #0b1120;
+  --color-card: #1e293b;
+  --color-card-hover: #273548;
+  --color-gold: #c8a75b;
+  --color-gold-hover: #d4b76a;
+  --color-gold-dark: #a88b3f;
+  --color-text: #ffffff;
+  --color-text-secondary: #94a3b8;
+  --color-text-muted: #64748b;
+  --color-border: #334155;
+}
+
+/* Tema claro - html.light tiene mayor especificidad que :root */
+html.light, .light {
+  --color-bg: #f1f5f9;
+  --color-sidebar: #e2e8f0;
+  --color-card: #ffffff;
+  --color-card-hover: #f8fafc;
+  --color-gold: #b48a2a;
+  --color-gold-hover: #c49a3a;
+  --color-gold-dark: #946a1a;
+  --color-text: #0f172a;
+  --color-text-secondary: #475569;
+  --color-text-muted: #94a3b8;
+  --color-border: #cbd5e1;
+}
+
+/* Modo de bajo contraste (sobreescribe algunas variables) */
+.low-contrast {
+  --color-bg: #1a1a2e;
+  --color-sidebar: #16162a;
+  --color-card: #252542;
+  --color-card-hover: #2d2d4e;
+  --color-gold: #8a7a4a;
+  --color-gold-hover: #9a8a5a;
+  --color-gold-dark: #7a6a3a;
+  --color-text: #d0d0d0;
+  --color-text-secondary: #9090a0;
+  --color-text-muted: #606070;
+  --color-border: #404060;
+}
+
+.light.low-contrast {
+  --color-bg: #e8e8ef;
+  --color-sidebar: #dddde8;
+  --color-card: #f0f0f5;
+  --color-card-hover: #eaeaf0;
+  --color-gold: #8a7a4a;
+  --color-gold-hover: #9a8a5a;
+  --color-gold-dark: #7a6a3a;
+  --color-text: #333344;
+  --color-text-secondary: #666677;
+  --color-text-muted: #9999aa;
+  --color-border: #ccccd8;
+}
+
+/* Base styles */
+html {
+  font-family: 'Inter', system-ui, sans-serif;
+  transition: background-color 0.4s ease, color 0.4s ease;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.4s ease, color 0.4s ease;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-erp-bg;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-erp-border rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-erp-text-muted;
+}
+
+/* Custom utilities */
+@layer components {
+  .btn-primary {
+    @apply bg-erp-gold text-erp-bg font-semibold px-4 py-2 rounded-erp-sm 
+           hover:bg-erp-gold-hover transition-all duration-200 shadow-erp-sm
+           focus:outline-none focus:ring-2 focus:ring-erp-gold focus:ring-offset-2 focus:ring-offset-erp-bg;
+  }
+  
+  .btn-secondary {
+    @apply bg-erp-card text-erp-text border border-erp-border px-4 py-2 rounded-erp-sm 
+           hover:bg-erp-card-hover transition-all duration-200
+           focus:outline-none focus:ring-2 focus:ring-erp-border;
+  }
+  
+  .card {
+    @apply bg-erp-card rounded-erp p-5 shadow-erp border border-erp-border;
+  }
+  
+  .card-hover {
+    @apply card transition-all duration-300 hover:shadow-lg;
+  }
+  .card-hover:hover {
+    border-color: color-mix(in srgb, var(--color-gold) 30%, transparent);
+  }
+  
+  .input {
+    @apply bg-erp-bg border border-erp-border rounded-erp-sm px-4 py-2.5 text-erp-text
+           placeholder:text-erp-text-muted focus:outline-none focus:border-erp-gold
+           focus:ring-1 focus:ring-erp-gold transition-all duration-200;
+  }
+  
+  .badge {
+    @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium;
+  }
+  
+  .badge-success {
+    @apply badge text-erp-success;
+    background-color: rgba(34, 197, 94, 0.2);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+  }
+
+  .badge-warning {
+    @apply badge text-erp-warning;
+    background-color: rgba(234, 179, 8, 0.2);
+    border: 1px solid rgba(234, 179, 8, 0.3);
+  }
+
+  .badge-danger {
+    @apply badge text-erp-danger;
+    background-color: rgba(239, 68, 68, 0.2);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+  }
+
+  .badge-info {
+    @apply badge text-erp-info;
+    background-color: rgba(59, 130, 246, 0.2);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+  }
+  
+  .table-container {
+    @apply overflow-x-auto rounded-erp border border-erp-border;
+  }
+  
+  .table {
+    @apply w-full text-left;
+  }
+  
+  .table th {
+    @apply px-4 py-3 bg-erp-sidebar text-erp-text-secondary text-xs font-semibold uppercase tracking-wider border-b border-erp-border;
+  }
+  
+  .table td {
+    @apply px-4 py-3 border-b border-erp-border;
+  }
+  
+  .table tr:hover {
+    background-color: color-mix(in srgb, var(--color-card-hover) 50%, transparent);
+  }
+  
+  /* Sidebar styles */
+  .sidebar-link {
+    @apply flex items-center gap-3 px-4 py-3 rounded-erp-sm text-erp-text-secondary
+           hover:bg-erp-card hover:text-erp-text transition-all duration-200;
+  }
+  
+  .sidebar-link.active {
+    @apply text-erp-gold border-l-2 border-erp-gold;
+    background-color: color-mix(in srgb, var(--color-gold) 10%, transparent);
+  }
+}
+
+/* Animation keyframes */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideIn {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+.animate-slideIn {
+  animation: slideIn 0.3s ease-out forwards;
+}
+
+/* Staggered animations */
+.stagger-1 { animation-delay: 0.1s; }
+.stagger-2 { animation-delay: 0.2s; }
+.stagger-3 { animation-delay: 0.3s; }
+.stagger-4 { animation-delay: 0.4s; }
+

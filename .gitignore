@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+backend/node_modules/
+frontend/node_modules/
+
+# Build files (frontend dist should be included for deployment)
+# Uncomment below if you want to ignore dist and build on deploy server instead
+# frontend/dist/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Database (SQLite regenerates automatically, but you can include it if you want to persist data)
+# backend/*.db
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
