@@ -21,7 +21,7 @@ if (DATABASE_URL) {
     connectionString: DATABASE_URL,
     ssl: { rejectUnauthorized: false }
   })
-  
+
   dbAsync = {
     all: async (sql, params = []) => {
       let pgSql = sql
@@ -62,10 +62,9 @@ if (DATABASE_URL) {
       return { lastID: result.rows[0]?.id || 0, changes: result.rowCount }
     }
   }
-  
+
   db = pool
   console.log("🔌 Conectado a PostgreSQL")
-  
 } else {
   // SQLite (local development)
   const sqlite3 = require("sqlite3").verbose()
@@ -74,7 +73,7 @@ if (DATABASE_URL) {
   sqliteDb.run("PRAGMA foreign_keys = ON")
   db = sqliteDb
   console.log("📁 Usando SQLite local")
-  
+
   dbAsync = {
     all: (sql, params = []) => {
       return new Promise((resolve, reject) => {
@@ -236,9 +235,6 @@ async function initDatabase() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )`
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )`
     : `CREATE TABLE IF NOT EXISTS ajustes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         clave TEXT UNIQUE NOT NULL,
@@ -255,12 +251,12 @@ async function initDatabase() {
 
   // Check if data exists
   const row = await dbAsync.get("SELECT COUNT(*) as count FROM usuarios")
-  if (row.count === 0) {
-    // Insert sample data with safe syntax
+  const count = parseInt(row.count, 10)
+  if (count === 0) {
     try {
       await dbAsync.run("INSERT INTO usuarios (email, password, nombre, rol) VALUES (?, ?, ?, ?)",
         ['ositodepeluche@oso.com.mx', '$2a$10$xO7O.yVJ5.sKjG5.sKjG5.sKjG5.sKjG5.sKjG5.sKjG5.sKjG5.sKjG', 'Administrador', 'administrador'])
-      
+
       await dbAsync.run("INSERT INTO clientes (nombre, email, telefono, direccion, tipo, estado, pedidos, total_gastado) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         ['Juan Pérez', 'juan.perez@email.com', '55 1234 5678', 'Av. Reforma 123, CDMX', 'regular', 'activo', 5, 45000])
       await dbAsync.run("INSERT INTO clientes (nombre, email, telefono, direccion, tipo, estado, pedidos, total_gastado) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
@@ -321,7 +317,6 @@ async function initDatabase() {
 app.post("/api/auth/login", async (req, res) => {
   const { email, password } = req.body
 
-  // Demo credentials check
   if (email === "ositodepeluche@oso.com.mx" && password === "Osito#123") {
     const token = jwt.sign(
       { email, id: 1, nombre: "Administrador", rol: "administrador" },
@@ -677,15 +672,13 @@ app.get("/api/ventas/stats/summary", authMiddleware, async (req, res) => {
   try {
     let ventasTotalQuery, ventasMesQuery
     if (DATABASE_URL) {
-      // PostgreSQL
       ventasTotalQuery = "SELECT SUM(total) as total, COUNT(*) as count FROM ventas"
       ventasMesQuery = "SELECT SUM(total) as total FROM ventas WHERE EXTRACT(MONTH FROM fecha) = $1 AND EXTRACT(YEAR FROM fecha) = $2"
     } else {
-      // SQLite
       ventasTotalQuery = "SELECT SUM(total) as total, COUNT(*) as count FROM ventas"
       ventasMesQuery = "SELECT SUM(total) as total FROM ventas WHERE strftime('%m', fecha) = ? AND strftime('%Y', fecha) = ?"
     }
-    
+
     const ventasTotal = await dbAsync.get(ventasTotalQuery)
     const now = new Date()
     const currentMonth = String(now.getMonth() + 1).padStart(2, '0')
@@ -710,19 +703,16 @@ app.get("/api/ventas/stats/summary", authMiddleware, async (req, res) => {
 })
 
 // Health check
-app
-
-// Health check - fixed
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', message: 'BLACKRAIN ERP API' })
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok", message: "BLACKRAIN ERP API" })
 })
 
 // Serve static files in production
-const FRONTEND_DIST = path.join(__dirname, '..', 'frontend', 'dist')
+const FRONTEND_DIST = path.join(__dirname, "..", "frontend", "dist")
 if (fs.existsSync(FRONTEND_DIST)) {
   app.use(express.static(FRONTEND_DIST))
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(FRONTEND_DIST, 'index.html'))
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(FRONTEND_DIST, "index.html"))
   })
 }
 
@@ -732,10 +722,10 @@ const PORT = process.env.PORT || 5000
   try {
     await initDatabase()
     app.listen(PORT, () => {
-      console.log(Servidor corriendo en puerto )
+      console.log(`Servidor corriendo en puerto ${PORT}`)
     })
   } catch (err) {
-    console.error('Fatal:', err)
+    console.error("Fatal:", err)
     process.exit(1)
   }
 })()
